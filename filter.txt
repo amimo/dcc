@@ -1,0 +1,12 @@
+# do not compile constructor
+!<clinit|init>
+
+# test demo
+!bigGoto
+.*TestCompiler.*
+
+# compile method named onCreate, mostly activity's onCreate
+.*;onCreate\(Landroid/os/Bundle;.*
+
+# compile all method, use to test compiler
+#.*

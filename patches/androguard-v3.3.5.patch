@@ -1,0 +1,201 @@
+From 49a1fbfafd42a4b8102ee2ebb49c50bc86ca66bf Mon Sep 17 00:00:00 2001
+From: amimo <61569276@qq.com>
+Date: Fri, 9 Aug 2019 22:13:32 +0800
+Subject: [PATCH] patch androguard 1.Create new single-statement block for
+ instructions that may throw exception. 2.Do not attach catch block to those
+ blocks that wouldn't throw exception. 3.Process other catch handlers before
+ the catchall handler. Fix testcase Throw.rethrow() failure.
+
+---
+ androguard/core/analysis/analysis.py | 119 +++++++++++++++++++++++++--
+ androguard/core/bytecodes/dvm.py     |   7 +-
+ 2 files changed, 115 insertions(+), 11 deletions(-)
+
+diff --git a/androguard/core/analysis/analysis.py b/androguard/core/analysis/analysis.py
+index d5a9b75..b63a567 100644
+--- a/androguard/core/analysis/analysis.py
++++ b/androguard/core/analysis/analysis.py
+@@ -264,6 +264,86 @@ class Exceptions:
+         for i in self.exceptions:
+             yield i
+ 
++may_throw_ops = {
++    0x1a,  # CONST_STRING
++    0x1b,  # CONST_STRING_JUMBO
++    0x1c,  # CONST_CLASS
++    0x1d,  # MONITOR_ENTER
++    0x1e,  # MONITOR_EXIT
++    0x1f,  # CHECK_CAST
++    0x20,  # INSTANCE_OF
++    0x21,  # ARRAY_LENGTH
++    0x22,  # NEW_INSTANCE
++    0x23,  # NEW_ARRAY
++    0x24,  # FILLED_NEW_ARRAY
++    0x25,  # FILLED_NEW_ARRAY_RANGE
++    0x27,  # THROW
++    0x44,  # AGET
++    0x45,  # AGET_WIDE
++    0x46,  # AGET_OBJECT
++    0x47,  # AGET_BOOLEAN
++    0x48,  # AGET_BYTE
++    0x49,  # AGET_CHAR
++    0x4a,  # AGET_SHORT
++    0x4b,  # APUT
++    0x4c,  # APUT_WIDE
++    0x4d,  # APUT_OBJECT
++    0x4e,  # APUT_BOOLEAN
++    0x4f,  # APUT_BYTE
++    0x50,  # APUT_CHAR
++    0x51,  # APUT_SHORT
++    0x52,  # IGET
++    0x53,  # IGET_WIDE
++    0x54,  # IGET_OBJECT
++    0x55,  # IGET_BOOLEAN
++    0x56,  # IGET_BYTE
++    0x57,  # IGET_CHAR
++    0x58,  # IGET_SHORT
++    0x59,  # IPUT
++    0x5a,  # IPUT_WIDE
++    0x5b,  # IPUT_OBJECT
++    0x5c,  # IPUT_BOOLEAN
++    0x5d,  # IPUT_BYTE
++    0x5e,  # IPUT_CHAR
++    0x5f,  # IPUT_SHORT
++    0x60,  # SGET
++    0x61,  # SGET_WIDE
++    0x62,  # SGET_OBJECT
++    0x63,  # SGET_BOOLEAN
++    0x64,  # SGET_BYTE
++    0x65,  # SGET_CHAR
++    0x66,  # SGET_SHORT
++    0x67,  # SPUT
++    0x68,  # SPUT_WIDE
++    0x69,  # SPUT_OBJECT
++    0x6a,  # SPUT_BOOLEAN
++    0x6b,  # SPUT_BYTE
++    0x6c,  # SPUT_CHAR
++    0x6d,  # SPUT_SHORT
++    0x6e,  # INVOKE_VIRTUAL
++    0x6f,  # INVOKE_SUPER
++    0x70,  # INVOKE_DIRECT
++    0x71,  # INVOKE_STATIC
++    0x72,  # INVOKE_INTERFACE
++    0x74,  # INVOKE_VIRTUAL_RANGE
++    0x75,  # INVOKE_SUPER_RANGE
++    0x76,  # INVOKE_DIRECT_RANGE
++    0x77,  # INVOKE_STATIC_RANGE
++    0x78,  # INVOKE_INTERFACE_RANGE
++    0x93,  # DIV_INT
++    0x94,  # REM_INT
++    0x9e,  # DIV_LONG
++    0x9f,  # REM_LONG
++    0xb3,  # DIV_INT_2ADDR
++    0xb4,  # REM_INT_2ADDR
++    0xbe,  # DIV_LONG_2ADDR
++    0xbf,  # REM_LONG_2ADDR
++    0xd3,  # DIV_INT_LIT16
++    0xd4,  # REM_INT_LIT16
++    0xdb,  # DIV_INT_LIT8
++    0xdc,  # REM_INT_LIT8
++}
++
+ 
+ class MethodAnalysis:
+     def __init__(self, vm, method):
+@@ -285,6 +365,22 @@ class MethodAnalysis:
+         if self.code:
+             self._create_basic_block()
+ 
++    def _has_catch_handle(self, excepts, addr_start, addr_end):
++        for handle in excepts:
++            if handle[0] >= addr_start and handle[1] <= addr_end:
++                return True
++
++            elif addr_end <= handle[1] and addr_start >= handle[0]:
++                return True
++        return False
++
++    def can_throw_exception(self, block):
++        for ins in block.get_instructions():
++            opcode = ins.get_op_value()
++            if opcode in may_throw_ops:
++                return True
++        return False
++
+     def _create_basic_block(self):
+         current_basic = DVMBasicBlock(0, self.__vm, self.method, self.basic_blocks)
+         self.basic_blocks.push(current_basic)
+@@ -294,24 +390,30 @@ class MethodAnalysis:
+         h = {}
+         idx = 0
+ 
++        log.debug("Parsing exceptions")
++        excepts = dvm.determineException(self.__vm, self.method)
++        for i in excepts:
++            l.extend([i[0]])
++            for handler in i[2:]:
++                l.append(handler[1])
++
+         log.debug("Parsing instructions")
+         for i in bc.get_instructions():
+             for j in BasicOPCODES:
++                # TODO: should split THROW
+                 if j.match(i.get_name()) is not None:
+                     v = dvm.determineNext(i, idx, self.method)
+                     h[idx] = v
+                     l.extend(v)
+                     break
++            else:
++                opcode = i.get_op_value()
++                if self._has_catch_handle(excepts, idx, idx + i.get_length() - 1) and opcode in may_throw_ops:
++                    l.append(idx)
++                    l.append(idx + i.get_length())
+ 
+             idx += i.get_length()
+ 
+-        log.debug("Parsing exceptions")
+-        excepts = dvm.determineException(self.__vm, self.method)
+-        for i in excepts:
+-            l.extend([i[0]])
+-            for handler in i[2:]:
+-                l.append(handler[1])
+-
+         log.debug("Creating basic blocks in %s" % self.method)
+         idx = 0
+         for i in bc.get_instructions():
+@@ -348,7 +450,8 @@ class MethodAnalysis:
+ 
+         for i in self.basic_blocks.get():
+             # setup exception by basic block
+-            i.set_exception_analysis(self.exceptions.get_exception(i.start, i.end - 1))
++            if self.can_throw_exception(i):
++                i.set_exception_analysis(self.exceptions.get_exception(i.start, i.end - 1))
+ 
+     def get_basic_blocks(self):
+         """
+diff --git a/androguard/core/bytecodes/dvm.py b/androguard/core/bytecodes/dvm.py
+index bf66a6d..2a92d40 100644
+--- a/androguard/core/bytecodes/dvm.py
++++ b/androguard/core/bytecodes/dvm.py
+@@ -402,14 +402,15 @@ def determineException(vm, m):
+                  (try_value.get_insn_count() * 2) - 1]
+ 
+             handler_catch = value[1]
+-            if handler_catch.get_size() <= 0:
+-                z.append(["Ljava/lang/Throwable;",
+-                          handler_catch.get_catch_all_addr() * 2])
+ 
+             for handler in handler_catch.get_handlers():
+                 z.append([vm.get_cm_type(handler.get_type_idx()),
+                           handler.get_addr() * 2])
+ 
++            if handler_catch.get_size() <= 0:
++                z.append(["Ljava/lang/Throwable;",
++                          handler_catch.get_catch_all_addr() * 2])
++
+             exceptions.append(z)
+ 
+     # print m.get_name(), exceptions
+-- 
+2.17.1
+

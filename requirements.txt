@@ -1,0 +1,6 @@
+networkx
+pydot
+future
+pyasn1
+cryptography
+lxml
