@@ -46,6 +46,15 @@ cd tests/demo-c
 如果一切顺利,"tests/demo-c/app/build/outputs/apk/debug/app-debug.apk"就是最终生成的apk,安装到手机并运行,看是否会崩溃.
 
 ## 使用dcc加固app
+首先在app代码合适的位置,如Application的onCreate,添加加载so库代码,并重新生成apk
+```
+try {
+    System.loadLibrary("nc");
+} catch (UnsatisfiedLinkError e) {
+    e.printStackTrace();
+}
+```
+
 dcc使用简单的黑白名单机制过滤需要编译或禁止编译的函数.
 修改filter.txt,使用正则表达式配置需要处理的函数.默认编译Activity.onCreate,和测试demo中的所有函数.
 ```
