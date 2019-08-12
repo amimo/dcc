@@ -286,14 +286,14 @@ class IrBuilder(object):
         for node in nodes:
             for ins in node.get_instr_list():
                 if isinstance(ins, LoadConstant) and ins.get_value_type() is None:
-                    if ins.get_cst().get_constant() > 0x80000000:
-                        Changed = True
-                        logger.debug("Set constant type to long: %s" % ins)
-                        ins.set_value_type('J')
-                    else:
+                    if -2147483648 <= ins.get_cst().get_constant() <= 2147483647:
                         Changed = True
                         logger.debug("Set constant type to int: %s" % ins)
                         ins.set_value_type('I')
+                    else:
+                        Changed = True
+                        logger.debug("Set constant type to long: %s" % ins)
+                        ins.set_value_type('J')
 
         if Changed:
             self.infer_type()
