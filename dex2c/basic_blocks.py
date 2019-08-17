@@ -136,8 +136,12 @@ class LandingPad(IrBasicBlock):
         self.node = source
         self.handles = OrderedDict()
 
-    def add_catch_handle(self, type, node):
-        self.handles[type] = node
+    def add_catch_handle(self, atype, node):
+        if atype in self.handles and atype != 'Ljava/lang/Throwable;':
+            raise Exception("duplicate catch handle for %s" % atype)
+
+        if atype not in self.handles:
+            self.handles[atype] = node
 
     @property
     def label(self):
