@@ -238,6 +238,18 @@ def get_params_type(descriptor):
     return []
 
 
+def get_method_triple(method, return_type=True):
+    method_triple = method.get_triple()
+    cls_name = method.class_name
+    _, name, proto = method_triple
+    if return_type:
+        return cls_name, name, proto
+    else:
+        index = proto.find(')')
+        proto = proto[:index + 1]
+        return cls_name, name, proto
+
+
 def create_png(cls_name, meth_name, graph, dir_name='graphs2'):
     m_name = ''.join(x for x in meth_name if x.isalnum())
     m_name = m_name.replace('<', '_').replace('>', '_')

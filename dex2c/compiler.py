@@ -550,36 +550,15 @@ class Dex2C:
     def __init__(self, vm, vmx):
         self.vm = vm
         self.vmx = vmx
-        self.conflict_methods = set()
-
-        # don't compile functions that have same parameter but differ return type
-        candidate_methods = {}
-        for m in vm.get_methods():
-            cls_name = m.class_name
-            method_triple = m.get_triple()
-            _, name, proto = method_triple
-
-            # strip return type
-            index = proto.find(')')
-            proto = proto[:index + 1]
-            method_triple = cls_name, name, proto
-
-            if method_triple in candidate_methods:
-                self.conflict_methods.add(m)
-                self.conflict_methods.add(candidate_methods[method_triple])
-            else:
-                candidate_methods[method_triple] = m
         
     def get_source_method(self, m):
-        if m in self.conflict_methods:
-            return None
-
         mx = self.vmx.get_method(m)
         z = IrBuilder(mx)
         irmethod = z.process()
         if irmethod:
             return irmethod.get_source()
-
+        else:
+            return None
 
     def get_source_class(self, _class):
         c = DvClass(_class, self.vmx)

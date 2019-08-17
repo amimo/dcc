@@ -15,7 +15,7 @@ from androguard.core.androconf import show_logging
 from androguard.core.bytecodes import apk, dvm
 from androguard.util import read
 from dex2c.compiler import Dex2C
-from dex2c.util import JniLongName
+from dex2c.util import JniLongName, get_method_triple, get_access_method
 
 APKTOOL = 'tools/apktool.jar'
 SIGNJAR = 'tools/signapk.jar'
@@ -88,11 +88,19 @@ def auto_vm(filename):
 
 
 class MethodFilter(object):
-    def __init__(self, configure):
+    def __init__(self, configure, vm):
         self._compile_filters = []
         self._keep_filters = []
         self._compile_full_match = set()
 
+        self.conflict_methods = set()
+        self.native_methods = set()
+
+        self._load_filter_configure(configure)
+        self._init_conflict_methods(vm)
+        self._init_native_methods(vm)
+
+    def _load_filter_configure(self, configure):
         if not os.path.exists(configure):
             return
 
@@ -111,16 +119,47 @@ class MethodFilter(object):
                 else:
                     self._compile_filters.append(re.compile(line))
 
-    def should_compile(self, func):
-        if func in self._compile_full_match:
+    def _init_conflict_methods(self, vm):
+        all_methods = {}
+        for m in vm.get_methods():
+            method_triple = get_method_triple(m, return_type=False)
+            if method_triple in all_methods:
+                self.conflict_methods.add(m)
+                self.conflict_methods.add(all_methods[method_triple])
+            else:
+                all_methods[method_triple] = m
+
+    def _init_native_methods(self, vm):
+        for m in vm.get_methods():
+            cls_name, name, _ = get_method_triple(m)
+
+            access = get_access_method(m.get_access_flags())
+            if 'native' in access:
+                self.native_methods.add((cls_name, name))
+
+    def should_compile(self, method):
+        # don't compile functions that have same parameter but differ return type
+        if method in self.conflict_methods:
+            return False
+
+        method_triple = get_method_triple(method)
+        cls_name, name, _ = method_triple
+
+        # Android VM may find the wrong method using short jni name
+        # don't compile function if there is a same named native method
+        if (cls_name, name) in self.native_methods:
+            return False
+
+        full_name = ''.join(method_triple)
+        if full_name in self._compile_full_match:
             return True
 
         for rule in self._keep_filters:
-            if rule.search(func):
+            if rule.search(full_name):
                 return False
 
         for rule in self._compile_filters:
-            if rule.search(func):
+            if rule.search(full_name):
                 return True
 
         return False
@@ -222,31 +261,30 @@ def archive_compiled_code(project_dir):
     return outfile
 
 
-def compile_dex(apkfile, filter_func):
+def compile_dex(apkfile, filtercfg):
     show_logging(level=logging.INFO)
 
     d = auto_vm(apkfile)
     dx = analysis.Analysis(d)
+
+    method_filter = MethodFilter(filtercfg, d)
 
     compiler = Dex2C(d, dx)
 
     compiled_method_code = {}
     errors = []
 
-    for m in d.get_methods()[:]:
-        cls_name = m.class_name
-        method_triple = m.get_triple()
-        _, name, proto = method_triple
+    for m in d.get_methods():
+        method_triple = get_method_triple(m)
 
-        method_triple = cls_name, name, proto
         jni_longname = JniLongName(*method_triple)
         full_name = ''.join(method_triple)
 
         if len(jni_longname) > 220:
-            logger.warning("name to long %s(> 220) %s" % (jni_longname, full_name))
+            logger.debug("name to long %s(> 220) %s" % (jni_longname, full_name))
             continue
 
-        if filter_func(full_name):
+        if method_filter.should_compile(m):
             logger.debug("compiling %s" % (full_name))
             try:
                 code = compiler.get_source_method(m)
@@ -270,8 +308,7 @@ def dcc(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_ar
         logger.error("file %s is not exists", apkfile)
         return
 
-    method_filter = MethodFilter(filtercfg)
-    compiled_methods, errors = compile_dex(apkfile, method_filter.should_compile)
+    compiled_methods, errors = compile_dex(apkfile, filtercfg)
 
     if errors:
         logger.warning('================================')
