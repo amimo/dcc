@@ -10,27 +10,27 @@
 //#define DEBUG
 
 #define D2C_RESOLVE_CLASS(cached_class, class_name)                          \
-  if (d2c_resolve_class(env, &cached_class, class_name)) {                   \
+  if (cached_class == NULL && d2c_resolve_class(env, &cached_class, class_name)) {                   \
     goto EX_HANDLE;                                                            \
   }
 
 #define D2C_RESOLVE_METHOD(cached_class, cached_method, class_name, method_name, signature)                             \
-    if (d2c_resolve_method(env, &cached_class, &cached_method, false, class_name, method_name, signature)) {            \
+    if (cached_method == NULL && d2c_resolve_method(env, &cached_class, &cached_method, false, class_name, method_name, signature)) {            \
         goto EX_HANDLE;                                                                                                     \
     }
 
 #define D2C_RESOLVE_STATIC_METHOD(cached_class, cached_method, class_name, method_name, signature)                      \
-    if (d2c_resolve_method(env, &cached_class, &cached_method, true, class_name, method_name, signature)) {             \
+    if (cached_method == NULL && d2c_resolve_method(env, &cached_class, &cached_method, true, class_name, method_name, signature)) {             \
         goto EX_HANDLE;                                                                                                     \
     }
 
 #define D2C_RESOLVE_FIELD(cached_class, cached_field, class_name, field_name, signature)                               \
-  if (d2c_resolve_field(env, &cached_class, &cached_field, false, class_name, field_name, signature)) {                  \
+  if (cached_field == NULL && d2c_resolve_field(env, &cached_class, &cached_field, false, class_name, field_name, signature)) {                  \
     goto EX_HANDLE;                                                                                                         \
   }
 
 #define D2C_RESOLVE_STATIC_FIELD(cached_class, cached_field, class_name, field_name, signature)                        \
-  if (d2c_resolve_field(env, &cached_class, &cached_field, true, class_name, field_name, signature)) {                   \
+  if (cached_field == NULL && d2c_resolve_field(env, &cached_class, &cached_field, true, class_name, field_name, signature)) {                   \
     goto EX_HANDLE;                                                                                                         \
   }
 
