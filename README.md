@@ -75,3 +75,6 @@ project-source.zip是个jni工程,里面包含我们编译出来的c代码,解�
 ## 注意
 + 这是我个人研究项目,当前还未经过大量测试,请谨慎用于线上项目!
 + 编译出来的C代码使用JNI跟Java虚拟机交互,有可能会对性能产生非常严重的影响,请谨慎选择加固函数!
+
+## 参考资源
++ [DAD](https://github.com/androguard/androguard/tree/master/androguard/decompiler/dad)
