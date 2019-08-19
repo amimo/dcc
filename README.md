@@ -10,7 +10,7 @@ git clone https://github.com/amimo/dcc.git
 + 安装项目依赖
 ```
 cd dcc
-pip3 -r requirements.txt
+pip3 install -r requirements.txt
 wget -O tools/apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.4.0.jar
 ```
 + 安装配置安卓开发环境(NDK r17+, SDK)
