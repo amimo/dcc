@@ -142,6 +142,10 @@ class MethodFilter(object):
         if method in self.conflict_methods:
             return False
 
+        # synthetic method
+        if method.get_access_flags() & 0x1000:
+            return False
+
         method_triple = get_method_triple(method)
         cls_name, name, _ = method_triple
 
@@ -151,12 +155,12 @@ class MethodFilter(object):
             return False
 
         full_name = ''.join(method_triple)
-        if full_name in self._compile_full_match:
-            return True
-
         for rule in self._keep_filters:
             if rule.search(full_name):
                 return False
+
+        if full_name in self._compile_full_match:
+            return True
 
         for rule in self._compile_filters:
             if rule.search(full_name):
