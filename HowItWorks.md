@@ -48,7 +48,12 @@ bar(v0_4); //"sss"
 PHI消除使用的是\<\<Translating out of static single assignment form\>\>论文中的方法,即将TSSA转成CSSA,然后给PHI相关变量分配相同名字来消除PHI.
 
 ## 局部引用缓存和释放
-当前实现会在函数作用域内,缓存解析的jclass, jmethodID, jfieldID.在每个函数中,他们都只会在首次使用时解析一次.
+当前使用全局和局部两级缓存策略缓存jclass, jmethodID, jfieldID解析结果.
+全局缓存jclass会消耗全局引用(全局引用表也会溢出).
+整个解析过程如下:
+1. 查看当前函数是否已有缓存,如果已经缓存则可直接使用.
+2. 局部没有缓存时,查看全局是否缓存,如有缓存,缓存结果到局部变量并返回结果.
+3. 全局仍没有缓存时,请求Java虚拟机解析,缓存结果到全局和局部并返回结果.
 
 为了避免局部引用表溢出(local reference table overflow),我们需要在引用不再被使用或没有使用时将其释放.
 我能想到的判断方法有两种:
