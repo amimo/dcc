@@ -24,7 +24,7 @@ try {
 //BB5
 bar(v0_4); //"sss"
 ```
-最后一行中v0的值必定是"sss",但如果直接在androiguard的CFG上构建SSA IR, v0_1, v0_2的值通过catch块传播的phi传播到bar,导致bar读取到值不正确.
+最后一行中v0的值必定是"sss",但如果直接在androiguard的CFG上构建SSA IR, v0_1, v0_2的值通过catch块的phi传播到bar,导致bar读取到值不正确.
 所以首先要对androguard生成的CFG进行改造:
 + 将会抛出异常的指令放到独立的基本块内
 + 对于不会抛出异常的基本块,不能给它添加catch后继
