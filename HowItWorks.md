@@ -3,7 +3,7 @@
 Dex CFG -> SSA IR -> Type Inference -> Out-Of-SSA & CodeGen
 ```
 ## 构建Dex code的CFG
-这步主要使用androguard完成,但是androguard生成的CFG并不能直接使用,考虑下面代码
+这步使用[androguard](https://github.com/androguard/androguard)完成,但是androguard生成的CFG并不能直接使用,考虑下面代码
 ```
 v1 = ...;
 v0_0 = 0;
