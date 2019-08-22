@@ -331,7 +331,7 @@ def dcc(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_ar
         shutil.copytree('project', project_dir)
         write_compiled_methods(project_dir, compiled_methods)
         src_zip = archive_compiled_code(project_dir)
-        os.rename(src_zip, source_archive)
+        shutil.move(src_zip, source_archive)
 
     if do_compile:
         build_project(project_dir)
