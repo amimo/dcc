@@ -15,7 +15,7 @@ from androguard.core.androconf import show_logging
 from androguard.core.bytecodes import apk, dvm
 from androguard.util import read
 from dex2c.compiler import Dex2C
-from dex2c.util import JniLongName, get_method_triple, get_access_method
+from dex2c.util import JniLongName, get_method_triple, get_access_method, is_synthetic_method, is_native_method
 
 APKTOOL = 'tools/apktool.jar'
 SIGNJAR = 'tools/signapk.jar'
@@ -95,10 +95,12 @@ class MethodFilter(object):
 
         self.conflict_methods = set()
         self.native_methods = set()
+        self.annotated_methods = set()
 
         self._load_filter_configure(configure)
         self._init_conflict_methods(vm)
         self._init_native_methods(vm)
+        self._init_annotation_methods(vm)
 
     def _load_filter_configure(self, configure):
         if not os.path.exists(configure):
@@ -137,13 +139,50 @@ class MethodFilter(object):
             if 'native' in access:
                 self.native_methods.add((cls_name, name))
 
+    def _add_annotation_method(self, method):
+        if not is_synthetic_method(method) and not is_native_method(method):
+            self.annotated_methods.add(method)
+
+    def _init_annotation_methods(self, vm):
+        for c in vm.get_classes():
+            adi_off = c.get_annotations_off()
+            if adi_off == 0:
+                continue
+
+            adi = vm.CM.get_obj_by_offset(adi_off)
+            annotated_class = False
+            # ref:https://github.com/androguard/androguard/issues/175
+            if adi.get_class_annotations_off() != 0:
+                ann_set_item = vm.CM.get_obj_by_offset(adi.get_class_annotations_off())
+                for aoffitem in ann_set_item.get_annotation_off_item():
+                    annotation_item = vm.CM.get_obj_by_offset(aoffitem.get_annotation_off())
+                    encoded_annotation = annotation_item.get_annotation()
+                    type_desc = vm.CM.get_type(encoded_annotation.get_type_idx())
+                    if type_desc.endswith('Dex2C;'):
+                        annotated_class = True
+                        for method in c.get_methods():
+                            self._add_annotation_method(method)
+                        break
+
+            if not annotated_class:
+                for mi in adi.get_method_annotations():
+                    method = vm.get_method_by_idx(mi.get_method_idx())
+                    ann_set_item = vm.CM.get_obj_by_offset(mi.get_annotations_off())
+
+                    for aoffitem in ann_set_item.get_annotation_off_item():
+                        annotation_item = vm.CM.get_obj_by_offset(aoffitem.get_annotation_off())
+                        encoded_annotation = annotation_item.get_annotation()
+                        type_desc = vm.CM.get_type(encoded_annotation.get_type_idx())
+                        if type_desc.endswith('Dex2C;'):
+                            self._add_annotation_method(method)
+
     def should_compile(self, method):
         # don't compile functions that have same parameter but differ return type
         if method in self.conflict_methods:
             return False
 
         # synthetic method
-        if method.get_access_flags() & 0x1000:
+        if is_synthetic_method(method) or is_native_method(method):
             return False
 
         method_triple = get_method_triple(method)
@@ -160,6 +199,9 @@ class MethodFilter(object):
                 return False
 
         if full_name in self._compile_full_match:
+            return True
+
+        if method in self.annotated_methods:
             return True
 
         for rule in self._compile_filters:
@@ -376,3 +418,4 @@ if __name__ == '__main__':
         logger.error("Compile %s failed!" % infile, exc_info=True)
     finally:
         clean_temp_files()
+

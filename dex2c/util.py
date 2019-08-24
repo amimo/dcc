@@ -435,6 +435,14 @@ def merge_type(type1, type2):
         return None
 
 
+def is_synthetic_method(method):
+    return method.get_access_flags() & 0x1000
+
+
+def is_native_method(method):
+    return method.get_access_flags() & 0x100
+
+
 def hex_escape_string(s):
     result = ''
     s = s.encode('utf8')
