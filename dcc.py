@@ -69,11 +69,14 @@ class ApkTool(object):
 def sign(unsigned_apk, signed_apk):
     pem = os.path.join('tests/testkey/testkey.x509.pem')
     pk8 = os.path.join('tests/testkey/testkey.pk8')
+    logger.info("signing %s -> %s" % (unsigned_apk, signed_apk))
     subprocess.check_call(['java', '-jar', SIGNJAR, pem, pk8, unsigned_apk, signed_apk])
 
 
-def build_project(project_dir):
-    subprocess.check_call(['ndk-build', '-j8', '-C', project_dir])
+def build_project(project_dir, num_processes=0):
+    if num_processes == 0:
+        num_processes = len((os.sched_getaffinity(0)))
+    subprocess.check_call(['ndk-build', '-j%d' % num_processes, '-C', project_dir])
 
 
 def auto_vm(filename):
@@ -349,7 +352,7 @@ def is_apk(name):
     return name.endswith('.apk')
 
 
-def dcc(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_archive='project-source.zip'):
+def dcc_main(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_archive='project-source.zip'):
     if not os.path.exists(apkfile):
         logger.error("file %s is not exists", apkfile)
         return
@@ -366,6 +369,8 @@ def dcc(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_ar
         return
 
     if project_dir:
+        if not os.path.exists(project_dir):
+            shutil.copytree('project', project_dir)
         write_compiled_methods(project_dir, compiled_methods)
     else:
         project_dir = make_temp_dir('dcc-project-')
@@ -413,7 +418,7 @@ if __name__ == '__main__':
         project_dir = None
 
     try:
-        dcc(infile, filtercfg, outapk, do_compile, project_dir, source_archive)
+        dcc_main(infile, filtercfg, outapk, do_compile, project_dir, source_archive)
     except Exception as e:
         logger.error("Compile %s failed!" % infile, exc_info=True)
     finally:
