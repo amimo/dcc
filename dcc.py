@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import json
 
 from androguard.core import androconf
 from androguard.core.analysis import analysis
@@ -19,12 +20,21 @@ from dex2c.util import JniLongName, get_method_triple, get_access_method, is_syn
 
 APKTOOL = 'tools/apktool.jar'
 SIGNJAR = 'tools/signapk.jar'
+NDKBUILD = 'ndk-build'
 LIBNATIVECODE = 'libnc.so'
 
 logger = logging.getLogger('dcc')
 
 tempfiles = []
 
+def is_windows():
+    return os.name == 'nt'
+
+def cpu_count():
+    num_processes = os.cpu_count()
+    if num_processes is None:
+        num_processes = 2
+    return num_processes
 
 def make_temp_dir(prefix='dcc'):
     global tempfiles
@@ -74,9 +84,7 @@ def sign(unsigned_apk, signed_apk):
 
 
 def build_project(project_dir, num_processes=0):
-    if num_processes == 0:
-        num_processes = len((os.sched_getaffinity(0)))
-    subprocess.check_call(['ndk-build', '-j%d' % num_processes, '-C', project_dir])
+    subprocess.check_call([NDKBUILD, '-j%d' % cpu_count(), '-C', project_dir])
 
 
 def auto_vm(filename):
@@ -347,10 +355,8 @@ def compile_dex(apkfile, filtercfg):
 
     return compiled_method_code, errors
 
-
 def is_apk(name):
     return name.endswith('.apk')
-
 
 def dcc_main(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_archive='project-source.zip'):
     if not os.path.exists(apkfile):
@@ -416,6 +422,20 @@ if __name__ == '__main__':
         project_dir = args['source_dir']
     else:
         project_dir = None
+
+    dcc_cfg = {}
+    with open('dcc.cfg') as fp:
+        dcc_cfg = json.load(fp)
+
+    if 'ndk_dir' in dcc_cfg and os.path.exists(dcc_cfg['ndk_dir']):
+        ndk_dir = dcc_cfg['ndk_dir']
+        if is_windows():
+            NDKBUILD = os.path.join(ndk_dir, 'ndk-build.cmd')
+        else:
+            NDKBUILD = os.path.join(ndk_dir, 'ndk-build')
+
+    if 'apktool' in dcc_cfg and os.path.exists(dcc_cfg['apktool']):
+        APKTOOL = dcc_cfg['apktool']
 
     try:
         dcc_main(infile, filtercfg, outapk, do_compile, project_dir, source_archive)
