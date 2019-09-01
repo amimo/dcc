@@ -2,6 +2,7 @@
 DCC (Dex-to-C Compiler) is method-based aot compiler that can translate DEX code to C code.
 
 ## 安装
+### Linux
 以下是ubuntu 18.04 环境下的安装配置步骤,如果某些环节已经配置过,如JDK,可跳过.
 + 下载代码
 ```
@@ -21,6 +22,16 @@ export PATH=path/to/ndk:$PATH
 ```
 sudo apt-get install openjdk-8-jdk
 ```
+### Windows
++ 安装python3
++ 安装项目依赖. 下载apktool,将其重命名为apktool.jar后放到dcc/tools目录中.
+```
+cd dcc
+pip3 install -r requirements.txt
+```
++ 安装NDK(r17+),将dcc.cfg中ndk_dir修改为NDK安装目录
++ 安装JRE或JDK,将java加入path.
+
 ## 使用dcc加固app
 ### 1. 加载Native库
 首先在app代码合适的位置,如Application的静态代码块或onCreate等,添加加载so库代码,并重新生成apk
@@ -39,7 +50,7 @@ dcc支持使用黑白名单来过滤需要编译或禁止编译的函数.
 vi filter.txt
 ```
 #### 使用注解
-新增Dex2C注解
+在任意包中新增Dex2C注解类
 ```
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -51,7 +62,7 @@ public @interface Dex2C {}
 然后使用Dex2C标记需要编译的类或者方法
 
 ### 3. 加固APP
-使用如下命令加固app.apk
+使用如下命令加固your_app.apk
 ```
 python3 dcc.py your_app.apk -o out.apk
 ```
