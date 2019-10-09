@@ -90,7 +90,13 @@ def build_project(project_dir, num_processes=0):
 def auto_vm(filename):
     ret = androconf.is_android(filename)
     if ret == 'APK':
-        return dvm.DalvikVMFormat(apk.APK(filename).get_dex())
+        tmp = {}
+        i = 0
+        for x in apk.APK(filename).get_all_dex():
+            i += 1
+            key = str(i)
+            tmp[key] = dvm.DalvikVMFormat(x)
+        return tmp
     elif ret == 'DEX':
         return dvm.DalvikVMFormat(read(filename))
     elif ret == 'DEY':
@@ -320,40 +326,48 @@ def archive_compiled_code(project_dir):
 
 def compile_dex(apkfile, filtercfg):
     show_logging(level=logging.INFO)
+    
+    tmp = auto_vm(apkfile)
+    
+    X_compiled_method_code = {}
+    X_errors = []
+    
+    for i in tmp:
+        d = tmp[i]
+        dx = analysis.Analysis(d)
 
-    d = auto_vm(apkfile)
-    dx = analysis.Analysis(d)
+        method_filter = MethodFilter(filtercfg, d)
 
-    method_filter = MethodFilter(filtercfg, d)
+        compiler = Dex2C(d, dx)
 
-    compiler = Dex2C(d, dx)
+        compiled_method_code = {}
+        errors = []
 
-    compiled_method_code = {}
-    errors = []
+        for m in d.get_methods():
+            method_triple = get_method_triple(m)
 
-    for m in d.get_methods():
-        method_triple = get_method_triple(m)
+            jni_longname = JniLongName(*method_triple)
+            full_name = ''.join(method_triple)
 
-        jni_longname = JniLongName(*method_triple)
-        full_name = ''.join(method_triple)
-
-        if len(jni_longname) > 220:
-            logger.debug("name to long %s(> 220) %s" % (jni_longname, full_name))
-            continue
-
-        if method_filter.should_compile(m):
-            logger.debug("compiling %s" % (full_name))
-            try:
-                code = compiler.get_source_method(m)
-            except Exception as e:
-                logger.warning("compile method failed:%s (%s)" % (full_name, str(e)), exc_info=True)
-                errors.append('%s:%s' % (full_name, str(e)))
+            if len(jni_longname) > 220:
+                logger.debug("name to long %s(> 220) %s" % (jni_longname, full_name))
                 continue
 
-            if code:
-                compiled_method_code[method_triple] = code
+            if method_filter.should_compile(m):
+                logger.debug("compiling %s" % (full_name))
+                try:
+                    code = compiler.get_source_method(m)
+                except Exception as e:
+                    logger.warning("compile method failed:%s (%s)" % (full_name, str(e)), exc_info=True)
+                    errors.append('%s:%s' % (full_name, str(e)))
+                    X_errors.extend(errors)
+                    continue
 
-    return compiled_method_code, errors
+                if code:
+                    compiled_method_code[method_triple] = code
+                    X_compiled_method_code.update(compiled_method_code)
+                    
+    return X_compiled_method_code, X_errors
 
 def is_apk(name):
     return name.endswith('.apk')
