@@ -246,19 +246,40 @@ def copy_compiled_libs(project_dir, decompiled_dir):
 
 
 def native_class_methods(smali_path, compiled_methods):
-    def _skip_until(fp, needle):
+    def next_line():
+        return fp.readline()
+
+    def handle_annotanion():
         while True:
-            line = fp.readline()
+            line = next_line()
             if not line:
                 break
-            if line.strip() == needle:
+            s = line.strip()
+            code_lines.append(line)
+            if s == '.end annotation':
                 break
+            else:
+                continue
+
+    def handle_method_body():
+        while True:
+            line = next_line()
+            if not line:
+                break
+            s = line.strip()
+            if s == '.end method':
+                break
+            elif s.startswith('.annotation') and s.find('Dex2C') < 0:
+                code_lines.append(line)
+                handle_annotanion()
+            else:
+                continue
 
     code_lines = []
     class_name = ''
     with open(smali_path, 'r') as fp:
         while True:
-            line = fp.readline()
+            line = next_line()
             if not line:
                 break
             code_lines.append(line)
@@ -270,8 +291,9 @@ def native_class_methods(smali_path, compiled_methods):
                 param = current_method.find('(')
                 name, proto = current_method[:param], current_method[param:]
                 if (class_name, name, proto) in compiled_methods:
-                    code_lines[-1] = code_lines[-1].replace(current_method, 'native ' + current_method)
-                    _skip_until(fp, '.end method')
+                    if line.find(' native ') < 0:
+                        code_lines[-1] = code_lines[-1].replace(current_method, 'native ' + current_method)
+                    handle_method_body()
                     code_lines.append('.end method\n')
 
     with open(smali_path, 'w') as fp:
