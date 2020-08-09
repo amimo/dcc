@@ -269,7 +269,7 @@ def native_class_methods(smali_path, compiled_methods):
             s = line.strip()
             if s == '.end method':
                 break
-            elif s.startswith('.annotation') and s.find('Dex2C') < 0:
+            elif s.startswith('.annotation runtime') and s.find('Dex2C') < 0:
                 code_lines.append(line)
                 handle_annotanion()
             else:
