@@ -421,7 +421,7 @@ def merge_type(type1, type2):
         return type1
 
     if (is_int(type1) and is_int(type2)) or \
-            (is_float(type2) and is_float(type2)):
+            (is_float(type1) and is_float(type2)):
         return get_bigger_type(type1, type2)
     elif is_array(type1) or is_array(type2):
         new_type = merge_array_type(type1, type2)
