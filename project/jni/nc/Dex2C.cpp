@@ -6,6 +6,7 @@
 #include "ScopedLocalRef.h"
 #include "ScopedPthreadMutexLock.h"
 #include "well_known_classes.h"
+#include "DynamicRegister.h"
 
 struct MemberTriple {
     MemberTriple(const char *cls_name, const char *name, const char *sig):class_name_(cls_name), member_name_(name), signautre_(sig) {}
@@ -257,5 +258,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_ERR;
     }
     cache_well_known_classes(env);
+    auto result = DynamicRegister(env);
+    if (nullptr != result)
+    {
+        LOGD("d2c_throw_exception %s", result);
+        return JNI_ERR;
+    }
     return JNI_VERSION_1_6;
 }
