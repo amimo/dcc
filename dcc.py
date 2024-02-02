@@ -16,7 +16,7 @@ from androguard.core.androconf import show_logging
 from androguard.core.bytecodes import apk, dvm
 from androguard.util import read
 from dex2c.compiler import Dex2C
-from dex2c.util import JniLongName, get_method_triple, get_access_method, is_synthetic_method, is_native_method, MangleForJni
+from dex2c.util import JniLongName, get_method_triple, get_access_method, is_synthetic_method, is_native_method
 
 APKTOOL = 'tools/apktool.jar'
 SIGNJAR = 'tools/signapk.jar'
@@ -405,7 +405,7 @@ def write_dynamic_register(project_dir, compiled_methods):
         if not full_name in native_method_prototype:
             raise Exception('Method %s prototype info could not be found' % full_name)
 
-        class_path = MangleForJni(method_triple[0][1:-1]).replace('_', '/')
+        class_path = method_triple[0][1:-1].replace('.', '/')
         method_name = method_triple[1]
         method_signature = method_triple[2]
         method_native_name = full_name
@@ -468,18 +468,24 @@ def dcc_main(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, sour
         if not os.path.exists(project_dir):
             shutil.copytree('project', project_dir)
         write_compiled_methods(project_dir, compiled_methods)
+
+        if not dynamic_register:
+            write_empty_dynamic_register(project_dir, compiled_methods)
+        else:
+            write_dynamic_register(project_dir, compiled_methods)
     else:
         project_dir = make_temp_dir('dcc-project-')
         shutil.rmtree(project_dir)
         shutil.copytree('project', project_dir)
         write_compiled_methods(project_dir, compiled_methods)
+
+        if not dynamic_register:
+            write_empty_dynamic_register(project_dir, compiled_methods)
+        else:
+            write_dynamic_register(project_dir, compiled_methods)
+
         src_zip = archive_compiled_code(project_dir)
         shutil.move(src_zip, source_archive)
-
-    if not dynamic_register:
-        write_empty_dynamic_register(project_dir, compiled_methods)
-    else:
-        write_dynamic_register(project_dir, compiled_methods)
 
     if do_compile:
         build_project(project_dir)
