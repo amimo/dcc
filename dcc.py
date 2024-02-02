@@ -405,7 +405,7 @@ def write_dynamic_register(project_dir, compiled_methods):
         if not full_name in native_method_prototype:
             raise Exception('Method %s prototype info could not be found' % full_name)
 
-        class_path = MangleForJni(method_triple[0]).replace('_', '/')
+        class_path = MangleForJni(method_triple[0][1:-1]).replace('_', '/')
         method_name = method_triple[1]
         method_signature = method_triple[2]
         method_native_name = full_name
@@ -426,7 +426,7 @@ def write_dynamic_register(project_dir, compiled_methods):
     export_block_count = 0
     for class_path, methods in exportList.items():
         export_block += 'clazz = env->FindClass("%s");\nif (nullptr == clazz)\n    return "Class not found: %s";\n' % (class_path, class_path)
-        export_block += 'JNINativeMethod exportMethod_%d = {\n' % export_block_count
+        export_block += 'JNINativeMethod exportMethod_%d[] = {\n' % export_block_count
 
         for method_name, method_signature, method_native_name, method_native_prototype in methods:
             extern_block += 'extern %s;\n' % method_native_prototype
