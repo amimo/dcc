@@ -258,8 +258,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_ERR;
     }
     cache_well_known_classes(env);
-    auto result = DynamicRegister(env);
-    if (nullptr != result)
+    const char *result = dynamic_register_compile_methods(env);
+    if (result != nullptr)
     {
         LOGD("d2c_throw_exception %s", result);
         return JNI_ERR;

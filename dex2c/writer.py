@@ -103,14 +103,14 @@ class Writer(object):
 
         self.write("\n/* %s->%s%s */\n" % (class_name, name, proto))
 
-        if not self.dynamic_register:
-            self.write('extern "C" JNIEXPORT %s JNICALL\n' % get_native_type(self.irmethod.rtype))
-        else:
+        if self.dynamic_register:
             self.write(get_native_type(self.irmethod.rtype) + ' ')
             self.prototype.append(get_native_type(self.irmethod.rtype) + ' ')
-        self.write(jni_name)
-        if self.dynamic_register:
             self.prototype.append(jni_name)
+        else:
+            self.write('extern "C" JNIEXPORT %s JNICALL\n' % get_native_type(self.irmethod.rtype))
+            
+        self.write(jni_name)
         params = self.irmethod.params
         if 'static' not in access:
             params = params[1:]

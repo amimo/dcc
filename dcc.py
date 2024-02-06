@@ -339,7 +339,6 @@ def archive_compiled_code(project_dir):
     outfile = shutil.make_archive(outfile, 'zip', project_dir)
     return outfile
 
-native_method_prototype = {}
 def compile_dex(apkfile, filtercfg, dynamic_register):
     show_logging(level=logging.INFO)
 
@@ -350,8 +349,7 @@ def compile_dex(apkfile, filtercfg, dynamic_register):
 
     compiler = Dex2C(d, dx, dynamic_register)
 
-    global native_method_prototype
-    native_method_prototype.clear()
+    native_method_prototype = {}
     compiled_method_code = {}
     errors = []
 
@@ -378,82 +376,81 @@ def compile_dex(apkfile, filtercfg, dynamic_register):
                 compiled_method_code[method_triple] = code[0]
                 native_method_prototype[jni_longname] = code[1]
 
-    return compiled_method_code, errors
+    return compiled_method_code, native_method_prototype, errors
 
 def is_apk(name):
     return name.endswith('.apk')
 
-def write_empty_dynamic_register(project_dir, compiled_methods):
+def write_dummy_dynamic_register(project_dir):
     source_dir = os.path.join(project_dir, 'jni', 'nc')
     if not os.path.exists(source_dir):
         os.makedirs(source_dir)
 
     filepath = os.path.join(source_dir, 'DynamicRegister.cpp')
     with open(filepath, 'w') as fp:
-        fp.write('#include "DynamicRegister.h"\n\nconst char *DynamicRegister(JNIEnv *env) { return nullptr; }')
+        fp.write('#include "DynamicRegister.h"\n\nconst char *dynamic_register_compile_methods(JNIEnv *env) { return nullptr; }')
 
-def write_dynamic_register(project_dir, compiled_methods):
+def write_dynamic_register(project_dir, compiled_methods, method_prototypes):
     source_dir = os.path.join(project_dir, 'jni', 'nc')
     if not os.path.exists(source_dir):
         os.makedirs(source_dir)
 
-    exportList = {}
+    export_list = {}
 
     # Make export list
-    for method_triple, code in compiled_methods.items():
+    for method_triple in sorted(compiled_methods.keys()):
         full_name = JniLongName(*method_triple)
-        if not full_name in native_method_prototype:
+        if not full_name in method_prototypes:
             raise Exception('Method %s prototype info could not be found' % full_name)
 
         class_path = method_triple[0][1:-1].replace('.', '/')
         method_name = method_triple[1]
         method_signature = method_triple[2]
         method_native_name = full_name
-        method_native_prototype = native_method_prototype[full_name]
+        method_native_prototype = method_prototypes[full_name]
 
-        if not class_path in exportList:
-            exportList[class_path] = []
+        if not class_path in export_list:
+            export_list[class_path] = [] # methods
         
-        exportList[class_path].append((method_name, method_signature, method_native_name, method_native_prototype))
+        export_list[class_path].append((method_name, method_signature, method_native_name, method_native_prototype))
 
-    if 0 == len(exportList):
+    if len(export_list) == 0:
         logger.info('No export methods')
         return
     
     # Generate extern block and export block
-    extern_block = ''
-    export_block = '\njclass clazz;\n\n'
-    export_block_count = 0
-    for class_path, methods in exportList.items():
-        export_block += 'clazz = env->FindClass("%s");\nif (nullptr == clazz)\n    return "Class not found: %s";\n' % (class_path, class_path)
-        export_block += 'JNINativeMethod exportMethod_%d[] = {\n' % export_block_count
+    extern_block = []
+    export_block = ['\njclass clazz;\n']
+    export_block_template = 'clazz = env->FindClass("%s");\nif (clazz == nullptr)\n    return "Class not found: %s";\n'
+    export_block_template += 'const JNINativeMethod export_method_%d[] = {\n%s\n};\n'
+    export_block_template += 'env->RegisterNatives(clazz, export_method_%d, %d);\n'
+    export_block_template += 'env->DeleteLocalRef(clazz);\n'
 
-        for method_name, method_signature, method_native_name, method_native_prototype in methods:
-            extern_block += 'extern %s;\n' % method_native_prototype
-            export_block += '{"%s", "%s", (void *)%s},\n' % (method_name, method_signature, method_native_name)
+    for index, class_path in enumerate(sorted(export_list.keys())):
+        methods = export_list[class_path]
 
-        export_block += '};\n'
-        export_block += 'env->RegisterNatives(clazz, exportMethod_%d, %d);\n\n' % (export_block_count, len(methods))
-        export_block_count += 1
+        extern_block.append('\n'.join(['extern %s;' % method[3] for method in methods]))
+        
+        export_methods = ',\n'.join(['{"%s", "%s", (void *)%s}' % (method[0], method[1], method[2]) for method in methods])
+        export_block.append(export_block_template % (class_path, class_path, index, export_methods, index, len(methods)))
 
-    export_block += 'return nullptr;\n'
+    export_block.append('return nullptr;\n')
 
     # Write DynamicRegister.cpp
     filepath = os.path.join(source_dir, 'DynamicRegister.cpp')
-    fp = open(filepath, 'w')
-    fp.write('#include "DynamicRegister.h"\n\n')
-    fp.write(extern_block)
-    fp.write('\nconst char *DynamicRegister(JNIEnv *env)\n{')
-    fp.write(export_block)
-    fp.write('}')
-    fp.close()
+    with open(filepath, 'w') as fp:
+        fp.write('#include "DynamicRegister.h"\n\n')
+        fp.write('\n'.join(extern_block))
+        fp.write('\n\nconst char *dynamic_register_compile_methods(JNIEnv *env) {')
+        fp.write('\n'.join(export_block))
+        fp.write('}')
 
 def dcc_main(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, source_archive='project-source.zip', dynamic_register=False):
     if not os.path.exists(apkfile):
         logger.error("file %s is not exists", apkfile)
         return
 
-    compiled_methods, errors = compile_dex(apkfile, filtercfg, dynamic_register)
+    compiled_methods, method_prototypes, errors = compile_dex(apkfile, filtercfg, dynamic_register)
 
     if errors:
         logger.warning('================================')
@@ -469,20 +466,20 @@ def dcc_main(apkfile, filtercfg, outapk, do_compile=True, project_dir=None, sour
             shutil.copytree('project', project_dir)
         write_compiled_methods(project_dir, compiled_methods)
 
-        if not dynamic_register:
-            write_empty_dynamic_register(project_dir, compiled_methods)
+        if dynamic_register:
+            write_dynamic_register(project_dir, compiled_methods, method_prototypes)
         else:
-            write_dynamic_register(project_dir, compiled_methods)
+            write_dummy_dynamic_register(project_dir)
     else:
         project_dir = make_temp_dir('dcc-project-')
         shutil.rmtree(project_dir)
         shutil.copytree('project', project_dir)
         write_compiled_methods(project_dir, compiled_methods)
 
-        if not dynamic_register:
-            write_empty_dynamic_register(project_dir, compiled_methods)
+        if dynamic_register:
+            write_dynamic_register(project_dir, compiled_methods, method_prototypes)
         else:
-            write_dynamic_register(project_dir, compiled_methods)
+            write_dummy_dynamic_register(project_dir)
 
         src_zip = archive_compiled_code(project_dir)
         shutil.move(src_zip, source_archive)
