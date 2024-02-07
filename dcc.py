@@ -327,7 +327,7 @@ def write_compiled_methods(project_dir, compiled_methods):
         if os.path.exists(filepath):
             logger.warning("Overwrite file %s %s" % (filepath, method_triple))
 
-        with open(filepath, 'w') as fp:
+        with open(filepath, 'w', encoding='utf-8') as fp:
             fp.write('#include "Dex2C.h"\n' + code)
 
     with open(os.path.join(source_dir, 'compiled_methods.txt'), 'w') as fp:
@@ -387,7 +387,7 @@ def write_dummy_dynamic_register(project_dir):
         os.makedirs(source_dir)
 
     filepath = os.path.join(source_dir, 'DynamicRegister.cpp')
-    with open(filepath, 'w') as fp:
+    with open(filepath, 'w', encoding='utf-8') as fp:
         fp.write('#include "DynamicRegister.h"\n\nconst char *dynamic_register_compile_methods(JNIEnv *env) { return nullptr; }')
 
 def write_dynamic_register(project_dir, compiled_methods, method_prototypes):
@@ -438,7 +438,7 @@ def write_dynamic_register(project_dir, compiled_methods, method_prototypes):
 
     # Write DynamicRegister.cpp
     filepath = os.path.join(source_dir, 'DynamicRegister.cpp')
-    with open(filepath, 'w') as fp:
+    with open(filepath, 'w', encoding='utf-8') as fp:
         fp.write('#include "DynamicRegister.h"\n\n')
         fp.write('\n'.join(extern_block))
         fp.write('\n\nconst char *dynamic_register_compile_methods(JNIEnv *env) {')
