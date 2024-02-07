@@ -52,12 +52,14 @@ class TmpnameAllocator(object):
 
 
 class Writer(object):
-    def __init__(self, irmethod):
+    def __init__(self, irmethod, dynamic_register):
         self.graph = irmethod.graph
         self.method = irmethod.method
         self.irmethod = irmethod
         self.visited_nodes = set()
         self.buffer = []
+        self.dynamic_register = dynamic_register
+        self.prototype = []
 
         entry = irmethod.entry
         self.ra = irmethod.ra
@@ -67,6 +69,9 @@ class Writer(object):
 
     def __str__(self):
         return ''.join(self.buffer)
+    
+    def get_prototype(self):
+        return ''.join(self.prototype)
 
     def write_trace(self, ins):
         s = ins.dump()
@@ -98,7 +103,13 @@ class Writer(object):
 
         self.write("\n/* %s->%s%s */\n" % (class_name, name, proto))
 
-        self.write('extern "C" JNIEXPORT %s JNICALL\n' % get_native_type(self.irmethod.rtype))
+        if self.dynamic_register:
+            self.write(get_native_type(self.irmethod.rtype) + ' ')
+            self.prototype.append(get_native_type(self.irmethod.rtype) + ' ')
+            self.prototype.append(jni_name)
+        else:
+            self.write('extern "C" JNIEXPORT %s JNICALL\n' % get_native_type(self.irmethod.rtype))
+            
         self.write(jni_name)
         params = self.irmethod.params
         if 'static' not in access:
@@ -110,8 +121,12 @@ class Writer(object):
                                zip(self.irmethod.params_type, params)])
         if proto:
             self.write('(JNIEnv *env, jobject thiz, %s)' % proto)
+            if self.dynamic_register:
+                self.prototype.append('(JNIEnv *env, jobject thiz, %s)' % proto)
         else:
             self.write('(JNIEnv *env, jobject thiz)')
+            if self.dynamic_register:
+                self.prototype.append('(JNIEnv *env, jobject thiz)')
         self.write('{\n')
         nodes = self.irmethod.irblocks
         for node in nodes:
@@ -145,7 +160,7 @@ class Writer(object):
             var_declared.add(r)
             self.write('%s v%s' % (get_cdecl_type(var_type), r))
             if util.is_ref(var_type):
-                self.write(' = NULL');
+                self.write(' = NULL')
             self.write(";\n")
 
         if node.var_to_declare and self.irmethod.landing_pads:
